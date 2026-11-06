@@ -1,0 +1,45 @@
+// @vitest-environment jsdom
+import React from 'react';
+import 'fake-indexeddb/auto';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, expect, it } from 'vitest';
+import App from '../src/App';
+import { db } from '../src/store';
+afterEach(async () => { cleanup(); await db.caches.clear(); });
+it('renders the empty workspace and saves, edits, searches and reloads a customer', async () => {
+ const user = userEvent.setup(); const app = render(<App/>);
+ expect(screen.getByText('Single-device workspace')).toBeTruthy();
+ await user.click(screen.getByRole('button',{name:'Customers',exact:true}));
+ await user.type(screen.getByLabelText('Customer name'),'Test Customer');
+ await user.type(screen.getByLabelText('Phone'),'9000000000');
+ await user.click(screen.getByRole('button',{name:'Save customer',exact:true}));
+ await waitFor(() => expect(screen.getByRole('cell',{name:'Test Customer'})).toBeTruthy());
+ await user.click(screen.getByRole('button',{name:'Edit customer',exact:true}));
+ await user.clear(screen.getByLabelText('Phone')); await user.type(screen.getByLabelText('Phone'),'9000000001');
+ await user.click(screen.getByRole('button',{name:'Save changes',exact:true}));
+ await waitFor(() => expect(screen.getByRole('cell',{name:'9000000001'})).toBeTruthy());
+ app.unmount(); render(<App/>); await user.click(screen.getByRole('button',{name:'Customers',exact:true}));
+ await waitFor(() => expect(screen.getByRole('cell',{name:'Test Customer'})).toBeTruthy());
+ await user.type(screen.getByRole('textbox',{name:'Search records'}),'absent');
+ expect(screen.queryByRole('cell',{name:'Test Customer'})).toBeNull();
+});
+it('records stock, a sale with warranty, and an AMC service visit through the forms', async () => {
+ const user = userEvent.setup(); render(<App/>);
+ const fill = async (label: string, value: string) => { const input=screen.getByLabelText(label); await user.clear(input); await user.type(input,value); };
+ const navigate = async (name: string) => user.click(screen.getByRole('button',{name,exact:true}));
+ await navigate('Customers'); await fill('Customer name','Test Buyer'); await fill('Phone','9000000000'); await navigate('Save customer');
+ await waitFor(() => expect(screen.getByRole('cell',{name:'Test Buyer'})).toBeTruthy());
+ await navigate('Inventory'); await fill('SKU / product code','B60'); await fill('Brand','Example'); await fill('Model','60Ah'); await user.selectOptions(screen.getByLabelText('Category'),'Battery'); await fill('Default price (₹)','5000'); await navigate('Save product');
+ await waitFor(() => expect(screen.getByRole('cell',{name:'B60'})).toBeTruthy());
+ await user.selectOptions(screen.getByLabelText('Product'),(await db.caches.get('local'))!.base.products[0].id);
+ await fill('Serial number','UNIT-1'); await navigate('Receive unit'); await waitFor(() => expect(screen.getByRole('cell',{name:'UNIT-1'})).toBeTruthy());
+ await navigate('Sales'); const cache=(await db.caches.get('local'))!;
+ await user.selectOptions(screen.getByLabelText('Customer'),cache.base.customers[0].id); await user.selectOptions(screen.getByLabelText('Available unit'),cache.base.units[0].id);
+ await fill('Agreed sale price (₹)','5200'); await fill('Sale date','2026-11-06'); await fill('Free-replacement end date','2028-11-06'); await fill('Prorated coverage end date','2029-11-06'); await fill('Warranty terms / reference','Test terms'); await navigate('Save sale & warranty');
+ await waitFor(() => expect(screen.getByRole('cell',{name:'₹5,200.00'})).toBeTruthy());
+ await navigate('Warranties'); expect(screen.getByRole('cell',{name:'Test terms'})).toBeTruthy();
+ await navigate('AMC'); await user.selectOptions(screen.getByLabelText('Customer'),cache.base.customers[0].id); await fill('Equipment, serials and installation location','UPS U1, shop'); await fill('Contract start','2026-01-01'); await fill('Contract end','2027-01-01'); await fill('AMC value (₹)','2400'); await fill('First visit due','2026-06-01'); await fill('Second visit due','2026-12-01'); await navigate('Save AMC');
+ await waitFor(() => expect(screen.getAllByRole('button',{name:'Mark completed'})).toHaveLength(2));
+ await user.click(screen.getAllByRole('button',{name:'Mark completed'})[0]); await waitFor(() => expect(screen.getAllByRole('button',{name:'Mark completed'})).toHaveLength(1));
+});
