@@ -1,7 +1,7 @@
 {
   "name": "bahar-battery-management",
   "version": "0.1.0",
-  "description": "Starter blueprint for **Bahar Battery Sales and Service**.",
+  "description": "Offline-first shop management for Bahar Battery Sales and Service",
   "directories": {
     "doc": "docs",
     "test": "tests"
@@ -21,7 +21,6 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
   "type": "module",
   "bugs": {
     "url": "https://github.com/salman28603-bit/Bahar-Battery-Management/issues"
